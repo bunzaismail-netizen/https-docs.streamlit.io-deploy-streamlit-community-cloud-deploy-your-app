@@ -9,8 +9,20 @@ import os
 from typing import Optional, List, Tuple, Any, Dict, Union
 import csv
 
-# Default database path (project root by default)
-DB_FILE = os.path.join(os.path.dirname(__file__), "climate.db")
+# Default database path - use Streamlit cache dir if available, else project root
+try:
+    import streamlit as st
+    DB_FILE = os.path.join(st.cache_resource.func.cache_dir, "climate.db") if hasattr(st, 'cache_resource') else os.path.expanduser("~/.streamlit_cache/climate.db")
+except Exception:
+    DB_FILE = os.path.expanduser("~/.streamlit_cache/climate.db")
+
+# Ensure cache directory exists
+try:
+    os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
+except (OSError, PermissionError):
+    # If we can't write to the home directory, use a temp location
+    import tempfile
+    DB_FILE = os.path.join(tempfile.gettempdir(), "climate.db")
 
 
 def connect_db(db_path: str = DB_FILE) -> Optional[sqlite3.Connection]:
@@ -22,18 +34,22 @@ def connect_db(db_path: str = DB_FILE) -> Optional[sqlite3.Connection]:
     """
     try:
         conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         # Migration: only attempt to alter users table if it already exists.
-        cursor.execute("PRAGMA table_info(users)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if columns:
-            # users table exists; ensure 'status' column is present
-            if "status" not in columns:
-                try:
-                    cursor.execute("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'")
-                except sqlite3.Error:
-                    # If migration fails for any reason, continue and recreate expected tables below
-                    pass
+        try:
+            cursor.execute("PRAGMA table_info(users)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if columns:
+                # users table exists; ensure 'status' column is present
+                if "status" not in columns:
+                    try:
+                        cursor.execute("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'")
+                    except sqlite3.Error:
+                        # If migration fails for any reason, continue and recreate expected tables below
+                        pass
+        except Exception:
+            pass
 
         # Create required tables if they don't exist
         cursor.execute(
@@ -85,7 +101,7 @@ def connect_db(db_path: str = DB_FILE) -> Optional[sqlite3.Connection]:
         )
         conn.commit()
         return conn
-    except sqlite3.Error as e:
+    except (sqlite3.Error, OSError, PermissionError) as e:
         print(f"❌ Database connection failed: {e}")
         return None
 

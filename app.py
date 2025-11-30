@@ -76,11 +76,15 @@ elif page == "Dashboard":
     from db_handler import DBHandler
 
     # Fetch farms
-    with DBHandler() as db:
-        farms = db.get_farms()
+    try:
+        with DBHandler() as db:
+            farms = db.get_farms() if db else []
+    except Exception as e:
+        st.error(f"Database error: {e}")
+        farms = []
 
     if not farms:
-        st.warning("No farms found in the database.")
+        st.warning("No farms found in the database. Please upload data or add a sample farm.")
     else:
         farm_names = [f["name"] for f in farms]
         selected_farm = st.selectbox("Select Farm", farm_names)
@@ -118,10 +122,15 @@ elif page == "Upload Data":
     from db_handler import DBHandler
 
     # Farm selection
-    with DBHandler() as db:
-        farms = db.get_farms()
+    try:
+        with DBHandler() as db:
+            farms = db.get_farms() if db else []
+    except Exception as e:
+        st.error(f"Database error: {e}")
+        farms = []
+    
     if not farms:
-        st.warning("No farms found in the database.")
+        st.warning("No farms found in the database. Please create a farm first.")
     else:
         farm_names = [f["name"] for f in farms]
         selected_farm = st.selectbox("Select Farm to Upload Data", farm_names)
